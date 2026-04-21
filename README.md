@@ -15,6 +15,19 @@ This repo focuses on the **platform foundation**: creating a reusable AWS enviro
 
 ---
 
+## Skills demonstrated by this repository
+
+This repository demonstrates practical platform engineering work across:
+
+- Terraform and Infrastructure as Code
+- AWS networking and Amazon EKS
+- Kubernetes cluster bootstrap
+- Ingress and public traffic flow design
+- GitOps platform enablement with Argo CD
+- Operational automation and environment trade-offs
+
+---
+
 ## What this repository does
 
 This project provisions and bootstraps:
@@ -50,7 +63,7 @@ Within this infra repo, I used:
 
 ---
 
-## Skills and topics this project covers
+## Skills and topics covered in detail
 
 ### Infrastructure as Code
 I used Terraform to define the AWS foundation because I wanted the environment to be reproducible rather than manually configured. This includes:
