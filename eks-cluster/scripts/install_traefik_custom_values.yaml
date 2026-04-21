@@ -1,0 +1,79 @@
+# Enable Traefik dashboard route
+ingressRoute:
+  dashboard:
+    enabled: true
+
+  # Expose /ping on the "web" entrypoint so the AWS NLB HTTP health check can use it
+  healthcheck:
+    enabled: true
+    entryPoints:
+      - web
+
+# Run 2 Traefik pods
+deployment:
+  replicas: 2
+
+ports:
+  web:
+    forwardedHeaders:
+      # Trust X-Forwarded-* headers only from the NLB subnet ranges
+      trustedIPs:
+        - 10.0.4.0/24
+        - 10.0.5.0/24
+        - 10.0.6.0/24
+
+    # entrypoint HTTP to HTTPS redirect
+    #http:
+    #  redirections:
+    #    entryPoint:
+    #      to: websecure
+    #      scheme: https
+    #      permanent: true
+
+  websecure:
+    # Expose port 443 on the Service
+    port: 443
+
+    # Forward traffic from Service port 443 to Traefik's HTTP entrypoint "web"
+    # This is used because AWS NLB terminates TLS first
+    targetPort: web
+
+# Turn on access logs and Prometheus metrics
+logs:
+  access:
+    enabled: true
+metrics:
+  prometheus:
+    enabled: true
+
+service:
+  type: LoadBalancer
+  annotations:
+    # Create an internet-facing AWS NLB
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+
+    # Let AWS Load Balancer Controller manage this Service
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+
+    # Register pod IPs directly as targets
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+
+    # ACM certificate used by the NLB for TLS termination
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:eu-west-2:022029981383:certificate/c9403836-0ab0-4bb5-b504-6f91feabb6f9"
+
+    # Enable TLS listener on port 443
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+
+    # Forward traffic from NLB to Traefik using TCP
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+
+    # NLB health check settings
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: "http"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-port: "traffic-port"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/ping"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-healthy-threshold: "3"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-unhealthy-threshold: "3"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
+
+    # Enable cross-zone load balancing
+    service.beta.kubernetes.io/aws-load-balancer-attributes: "load_balancing.cross_zone.enabled=true"
