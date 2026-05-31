@@ -1,0 +1,20 @@
+---
+aws_region: "eu-west-2"
+
+install_docker: false
+
+# Pin versions for repeatability.
+# kubectl should be within one minor version of your EKS control plane.
+kubectl_version: "v1.35.0"
+
+terraform_version: "1.14.3"
+terraform_arch: "amd64"
+
+eksctl_version: "0.226.0"
+eksctl_arch: "amd64"
+
+helm_version: "v4.1.0"
+helm_arch: "amd64"
+
+helm_repo_name: "eks"
+helm_repo_url: "https://aws.github.io/eks-charts"

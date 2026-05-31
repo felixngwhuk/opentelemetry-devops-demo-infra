@@ -1,0 +1,64 @@
+---
+- name: Set Helm variables
+  ansible.builtin.set_fact:
+    helm_work_dir: "/tmp/helm-{{ helm_version }}"
+    helm_archive_path: "/tmp/helm-{{ helm_version }}-linux-{{ helm_arch }}.tar.gz"
+    helm_bin_path: /usr/local/bin/helm
+
+- name: Ensure Helm work directory exists
+  ansible.builtin.file:
+    path: "{{ helm_work_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Skip Helm installer during check mode
+  ansible.builtin.debug:
+    msg: "Skipping Helm archive download, extract, and install during check mode."
+  when: ansible_check_mode
+
+- name: Download pinned Helm archive
+  ansible.builtin.get_url:
+    url: "https://get.helm.sh/helm-{{ helm_version }}-linux-{{ helm_arch }}.tar.gz"
+    dest: "{{ helm_archive_path }}"
+    mode: "0644"
+  when: not ansible_check_mode
+
+- name: Extract Helm archive
+  ansible.builtin.unarchive:
+    src: "{{ helm_archive_path }}"
+    dest: "{{ helm_work_dir }}"
+    remote_src: true
+    creates: "{{ helm_work_dir }}/linux-{{ helm_arch }}/helm"
+  when: not ansible_check_mode
+
+- name: Install Helm binary
+  ansible.builtin.copy:
+    src: "{{ helm_work_dir }}/linux-{{ helm_arch }}/helm"
+    dest: "{{ helm_bin_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  when: not ansible_check_mode
+
+- name: Check Helm version
+  ansible.builtin.command:
+    cmd: "{{ helm_bin_path }} version --short"
+  register: helm_version_check
+  changed_when: false
+
+- name: Add AWS EKS Helm chart repository
+  ansible.builtin.command:
+    cmd: "{{ helm_bin_path }} repo add {{ helm_repo_name }} {{ helm_repo_url }}"
+  become: false
+  register: helm_repo_add
+  changed_when: "'has been added' in helm_repo_add.stdout"
+  failed_when:
+    - helm_repo_add.rc != 0
+    - "'already exists' not in helm_repo_add.stderr"
+
+- name: Update AWS EKS Helm chart repository
+  ansible.builtin.command:
+    cmd: "{{ helm_bin_path }} repo update {{ helm_repo_name }}"
+  become: false
+  changed_when: false

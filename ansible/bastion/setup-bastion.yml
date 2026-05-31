@@ -1,0 +1,43 @@
+---
+- name: Configure EC2 bastion/admin host for AWS EKS operations
+  hosts: bastion
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+    - role: docker
+      when: install_docker | bool
+    - awscli
+    - kubectl
+    - terraform
+    - eksctl
+    - helm
+    - git
+
+  post_tasks:
+    - name: Skip installed tool version checks during check mode
+      ansible.builtin.debug:
+        msg: "Skipping installed tool version checks during check mode."
+      when: ansible_check_mode
+
+    - name: Show installed tool versions
+      ansible.builtin.shell: |
+        set -e
+        echo "Docker: $(docker --version 2>/dev/null || true)"
+        echo "kubectl: $(kubectl version --client=true 2>/dev/null || true)"
+        echo "AWS CLI: $(aws --version 2>&1 || true)"
+        echo "Terraform: $(terraform version 2>/dev/null | head -n 1 || true)"
+        echo "eksctl: $(eksctl version 2>/dev/null || true)"
+        echo "Helm: $(helm version --short 2>/dev/null || true)"
+        echo "Git: $(git --version 2>/dev/null || true)"
+      args:
+        executable: /bin/bash
+      register: tool_versions
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Print installed tool versions
+      ansible.builtin.debug:
+        msg: "{{ tool_versions.stdout_lines }}"
+      when: not ansible_check_mode

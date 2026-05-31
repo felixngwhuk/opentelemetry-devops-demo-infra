@@ -1,0 +1,24 @@
+---
+- name: Set kubectl variables
+  ansible.builtin.set_fact:
+    kubectl_bin_path: /usr/local/bin/kubectl
+
+- name: Skip kubectl installer during check mode
+  ansible.builtin.debug:
+    msg: "Skipping kubectl binary download during check mode."
+  when: ansible_check_mode
+
+- name: Download pinned kubectl binary
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
+    dest: "{{ kubectl_bin_path }}"
+    mode: "0755"
+    owner: root
+    group: root
+  when: not ansible_check_mode
+
+- name: Check kubectl client version
+  ansible.builtin.command:
+    cmd: "{{ kubectl_bin_path }} version --client=true"
+  register: kubectl_version_check
+  changed_when: false

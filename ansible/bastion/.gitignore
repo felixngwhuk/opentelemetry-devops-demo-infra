@@ -1,0 +1,19 @@
+# Local inventory may contain public IPs and local key paths
+inventory.ini
+
+# SSH keys - never commit
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# macOS
+.DS_Store
+
+# Ansible
+*.retry
+.ansible/
+
+# Python
+__pycache__/
+*.pyc

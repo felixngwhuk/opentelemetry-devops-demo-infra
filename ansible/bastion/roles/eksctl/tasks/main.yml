@@ -1,0 +1,48 @@
+---
+- name: Set eksctl variables
+  ansible.builtin.set_fact:
+    eksctl_work_dir: "/tmp/eksctl-{{ eksctl_version }}"
+    eksctl_archive_path: "/tmp/eksctl_Linux_{{ eksctl_arch }}_{{ eksctl_version }}.tar.gz"
+    eksctl_bin_path: /usr/local/bin/eksctl
+
+- name: Ensure eksctl work directory exists
+  ansible.builtin.file:
+    path: "{{ eksctl_work_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Skip eksctl installer during check mode
+  ansible.builtin.debug:
+    msg: "Skipping eksctl archive download, extract, and install during check mode."
+  when: ansible_check_mode
+
+- name: Download pinned eksctl archive
+  ansible.builtin.get_url:
+    url: "https://github.com/eksctl-io/eksctl/releases/download/v{{ eksctl_version }}/eksctl_Linux_{{ eksctl_arch }}.tar.gz"
+    dest: "{{ eksctl_archive_path }}"
+    mode: "0644"
+  when: not ansible_check_mode
+
+- name: Extract eksctl archive
+  ansible.builtin.unarchive:
+    src: "{{ eksctl_archive_path }}"
+    dest: "{{ eksctl_work_dir }}"
+    remote_src: true
+    creates: "{{ eksctl_work_dir }}/eksctl"
+  when: not ansible_check_mode
+
+- name: Install eksctl binary
+  ansible.builtin.copy:
+    src: "{{ eksctl_work_dir }}/eksctl"
+    dest: "{{ eksctl_bin_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  when: not ansible_check_mode
+
+- name: Check eksctl version
+  ansible.builtin.command:
+    cmd: "{{ eksctl_bin_path }} version"
+  register: eksctl_version_check
+  changed_when: false

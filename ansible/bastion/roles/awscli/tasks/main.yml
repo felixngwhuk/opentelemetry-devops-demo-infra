@@ -1,0 +1,53 @@
+---
+- name: Set AWS CLI variables
+  ansible.builtin.set_fact:
+    awscli_zip_path: /tmp/awscliv2.zip
+
+- name: Skip AWS CLI installer during check mode
+  ansible.builtin.debug:
+    msg: "Skipping AWS CLI installer download, extract, and install during check mode."
+  when: ansible_check_mode
+
+- name: Download AWS CLI v2 installer
+  ansible.builtin.get_url:
+    url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+    dest: "{{ awscli_zip_path }}"
+    mode: "0644"
+  when: not ansible_check_mode
+
+- name: Extract AWS CLI v2 installer
+  ansible.builtin.unarchive:
+    src: "{{ awscli_zip_path }}"
+    dest: /tmp
+    remote_src: true
+  when: not ansible_check_mode
+
+- name: Install or update AWS CLI v2
+  ansible.builtin.command:
+    cmd: /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+  register: awscli_install
+  changed_when: >
+    'You can now run' in awscli_install.stdout
+    or 'Found same AWS CLI version' not in awscli_install.stdout
+  when: not ansible_check_mode
+
+- name: Ensure AWS config directory exists for SSH user
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user }}/.aws"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0700"
+  when: ansible_user is defined
+
+- name: Configure AWS CLI default region only
+  ansible.builtin.copy:
+    dest: "/home/{{ ansible_user }}/.aws/config"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+    content: |
+      [default]
+      region={{ aws_region }}
+      output=json
+  when: ansible_user is defined
