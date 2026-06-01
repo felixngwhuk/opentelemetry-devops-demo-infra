@@ -30,3 +30,9 @@ variable "node_groups" {
     })
   }))
 }
+
+variable "bastion_role_name" {
+  description = "Name of the IAM role attached to the EC2 bastion host"
+  type        = string
+  default     = "EC2BastionAdminRole"
+}

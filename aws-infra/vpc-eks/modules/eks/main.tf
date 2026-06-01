@@ -40,10 +40,42 @@ resource "aws_eks_cluster" "main" {
   enabled_cluster_log_types = [
     "api",
     "audit"#,
-  #  "authenticator",
-  #  "controllerManager",
-  #  "scheduler"
-  ]  
+    #  "authenticator",
+    #  "controllerManager",
+    #  "scheduler"
+  ]
+}
+
+data "aws_iam_role" "bastion_admin" {
+  name = var.bastion_role_name
+}
+
+resource "aws_eks_access_entry" "bastion_admin" {
+  count = data.aws_iam_role.bastion_admin.arn != "" ? 1 : 0
+
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = data.aws_iam_role.bastion_admin.arn
+  type          = "STANDARD"
+
+  depends_on = [
+    aws_eks_cluster.main
+  ]
+}
+
+resource "aws_eks_access_policy_association" "bastion_admin" {
+  count = data.aws_iam_role.bastion_admin.arn != "" ? 1 : 0
+
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = data.aws_iam_role.bastion_admin.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [
+    aws_eks_access_entry.bastion_admin
+  ]
 }
 
 resource "aws_iam_role" "node" {
@@ -89,8 +121,8 @@ resource "aws_eks_node_group" "main" {
     min_size     = each.value.scaling_config.min_size
   }
 
-  update_config { 
-    max_unavailable = 1 
+  update_config {
+    max_unavailable = 1
   }
 
   depends_on = [
