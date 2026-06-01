@@ -40,6 +40,17 @@ variable "cluster_version" {
   default     = "1.34"
 }
 
+variable "cluster_authentication_mode" {
+  description = "EKS cluster authentication mode. Access entries require API or API_AND_CONFIG_MAP."
+  type        = string
+  default     = "API_AND_CONFIG_MAP"
+
+  validation {
+    condition     = contains(["API", "API_AND_CONFIG_MAP"], var.cluster_authentication_mode)
+    error_message = "cluster_authentication_mode must be either API or API_AND_CONFIG_MAP."
+  }
+}
+
 variable "node_groups" {
   description = "EKS node group configuration"
   type = map(object({

@@ -8,6 +8,17 @@ variable "cluster_version" {
   type        = string
 }
 
+variable "cluster_authentication_mode" {
+  description = "EKS cluster authentication mode. Access entries require API or API_AND_CONFIG_MAP."
+  type        = string
+  default     = "API_AND_CONFIG_MAP"
+
+  validation {
+    condition     = contains(["API", "API_AND_CONFIG_MAP"], var.cluster_authentication_mode)
+    error_message = "cluster_authentication_mode must be either API or API_AND_CONFIG_MAP."
+  }
+}
+
 variable "vpc_id" {
   description = "VPC ID"
   type        = string

@@ -4,8 +4,8 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name                                           = "${var.cluster_name}-vpc"
-    "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
+    Name                                        = "${var.cluster_name}-vpc"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
 }
 
@@ -16,9 +16,9 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name                                           = "${var.cluster_name}-private-${count.index + 1}"
-    "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
-    "kubernetes.io/role/internal-elb"              = "1"
+    Name                                        = "${var.cluster_name}-private-${count.index + 1}"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/role/internal-elb"           = "1"
   }
 }
 
@@ -31,9 +31,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                           = "${var.cluster_name}-public-${count.index + 1}"
-    "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
-    "kubernetes.io/role/elb"                       = "1"
+    Name                                        = "${var.cluster_name}-public-${count.index + 1}"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/role/elb"                    = "1"
   }
 }
 
@@ -46,7 +46,7 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_eip" "nat" {
-  count = length(var.public_subnet_cidrs)
+  count  = length(var.public_subnet_cidrs)
   domain = "vpc"
 
   tags = {

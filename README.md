@@ -241,8 +241,11 @@ The EKS module creates:
 - IAM roles for cluster and nodes
 - a managed node group
 - control plane logging resources
+- an EKS access entry that grants the bastion role cluster admin access
 
 I used EKS managed nodes because they reduce the amount of low-level cluster administration needed for a demo platform.
+
+The bastion host gets Kubernetes admin access through an EKS access entry for `EC2BastionAdminRole`. This requires the cluster authentication mode to be `API_AND_CONFIG_MAP` or `API`; this project defaults to `API_AND_CONFIG_MAP` so existing `aws-auth` ConfigMap behavior remains available.
 
 ### 4) Cluster bootstrap
 The bootstrap scripts install and configure:

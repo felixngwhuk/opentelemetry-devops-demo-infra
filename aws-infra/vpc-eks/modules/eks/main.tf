@@ -32,6 +32,11 @@ resource "aws_eks_cluster" "main" {
     subnet_ids = var.subnet_ids
   }
 
+  access_config {
+    authentication_mode                         = var.cluster_authentication_mode
+    bootstrap_cluster_creator_admin_permissions = true
+  }
+
   depends_on = [
     aws_iam_role_policy_attachment.cluster_policy,
     aws_cloudwatch_log_group.eks
@@ -39,7 +44,7 @@ resource "aws_eks_cluster" "main" {
 
   enabled_cluster_log_types = [
     "api",
-    "audit"#,
+    "audit",
     #  "authenticator",
     #  "controllerManager",
     #  "scheduler"

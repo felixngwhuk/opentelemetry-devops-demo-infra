@@ -7,12 +7,12 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "felixngwhuk-terraform-eks-state-s3-bucket"
-    key            = "terraform.tfstate"
-    region         = "eu-west-2"
+    bucket = "felixngwhuk-terraform-eks-state-s3-bucket"
+    key    = "terraform.tfstate"
+    region = "eu-west-2"
     #dynamodb_table = "terraform-eks-state-locks"
     use_lockfile = true
-    encrypt        = true
+    encrypt      = true
   }
 }
 
@@ -33,9 +33,10 @@ module "vpc" {
 module "eks" {
   source = "./modules/eks"
 
-  cluster_name    = var.cluster_name
-  cluster_version = var.cluster_version
-  vpc_id          = module.vpc.vpc_id
-  subnet_ids      = module.vpc.private_subnet_ids
-  node_groups     = var.node_groups
+  cluster_name                = var.cluster_name
+  cluster_version             = var.cluster_version
+  cluster_authentication_mode = var.cluster_authentication_mode
+  vpc_id                      = module.vpc.vpc_id
+  subnet_ids                  = module.vpc.private_subnet_ids
+  node_groups                 = var.node_groups
 }
