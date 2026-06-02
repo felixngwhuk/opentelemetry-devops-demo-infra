@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export eks_cluster_vpc_id=$(aws eks describe-cluster  --name "$my_eks_cluster_name"  --query "cluster.resourcesVpcConfig.vpcId"  --output text)
+
 helm repo add eks https://aws.github.io/eks-charts
 
 helm repo update eks

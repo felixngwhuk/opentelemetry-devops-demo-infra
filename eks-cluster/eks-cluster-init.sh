@@ -12,7 +12,6 @@ echo "Logging to: $LOG_FILE"
 
 export my_eks_cluster_name=my-eks-cluster
 export my_aws_region_name=$(aws configure get region)
-export eks_cluster_vpc_id=$(aws eks describe-cluster  --name "$my_eks_cluster_name"  --query "cluster.resourcesVpcConfig.vpcId"  --output text)
 
 
 echo "====== Running refresh_eks_cluster_connection.sh ======"
