@@ -58,8 +58,7 @@ service:
     # Register pod IPs directly as targets
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
 
-    # ACM certificate used by the NLB for TLS termination
-    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:eu-west-2:022029981383:certificate/c9403836-0ab0-4bb5-b504-6f91feabb6f9"
+    # ACM certificate used by the NLB for TLS termination is injected by install_traefik.sh
 
     # Enable TLS listener on port 443
     service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"

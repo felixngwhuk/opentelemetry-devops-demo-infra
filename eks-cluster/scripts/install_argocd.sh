@@ -17,4 +17,4 @@ echo "Waiting for Argo CD rollout ..."
 kubectl rollout status deployment/argocd-server -n argocd
 
 echo "Install bootstrap Argo CD root application ..."
-kubectl apply -f https://raw.githubusercontent.com/felixngwhuk/opentelemetry-devops-demo-gitops/refs/heads/main/bootstrap/root-application.yaml
+kubectl apply -f "${my_argocd_bootstrap_repo_url%/}/refs/heads/main/bootstrap/root-application.yaml"

@@ -9,7 +9,8 @@ helm repo update traefik
 
 kubectl create namespace traefik
 helm upgrade --install traefik traefik/traefik -n traefik \
-  -f "$SCRIPT_DIR/install_traefik_custom_values.yaml"
+  -f "$SCRIPT_DIR/install_traefik_custom_values.yaml" \
+  --set-string service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-ssl-cert"="$my_aws_load_balancer_ssl_cert_arn"
 #helm upgrade --install traefik traefik/traefik -n traefik \
 #  --set ingressRoute.dashboard.enabled=true \
 #  --set deployment.replicas=2 \
