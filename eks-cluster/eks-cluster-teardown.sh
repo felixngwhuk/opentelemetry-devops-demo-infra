@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cluster_name="my-eks-cluster"
+export my_eks_cluster_name="${my_eks_cluster_name:-my-eks-cluster}"
+export my_aws_region_name="${my_aws_region_name:-$(aws configure get region)}"
+
+echo "====== Running refresh_eks_cluster_connection.sh ======"
+./scripts/refresh_eks_cluster_connection.sh
 
 echo "========== uninstall traefik  ========="
 helm uninstall traefik -n traefik
@@ -16,18 +20,18 @@ helm uninstall aws-ebs-csi-driver -n kube-system
 
 echo "========== Delete IAM Role on AWS ========="
 eksctl delete iamserviceaccount \
-  --cluster="$cluster_name" \
+  --cluster="$my_eks_cluster_name" \
   --namespace=kube-system \
   --name=aws-load-balancer-controller
 
 echo "========== Delete ServiceAccount on EKS cluster ========="
 eksctl delete iamserviceaccount \
-  --cluster="$cluster_name" \
+  --cluster="$my_eks_cluster_name" \
   --namespace=kube-system \
   --name=ebs-csi-controller-sa
 
 echo "========== Delete the IAM identity provider association  ========="
-issuer=$(aws eks describe-cluster --name "$cluster_name" --query "cluster.identity.oidc.issuer" --output text)
+issuer=$(aws eks describe-cluster --name "$my_eks_cluster_name" --query "cluster.identity.oidc.issuer" --output text)
 echo "$issuer"
 
 issuer_hostpath="${issuer#https://}"   # strip https://

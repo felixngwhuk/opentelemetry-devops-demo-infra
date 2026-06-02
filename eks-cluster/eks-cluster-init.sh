@@ -10,8 +10,8 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "Logging to: $LOG_FILE"
 
-export my_eks_cluster_name=my-eks-cluster
-export my_aws_region_name=$(aws configure get region)
+export my_eks_cluster_name="${my_eks_cluster_name:-my-eks-cluster}"
+export my_aws_region_name="${my_aws_region_name:-$(aws configure get region)}"
 
 
 echo "====== Running refresh_eks_cluster_connection.sh ======"
