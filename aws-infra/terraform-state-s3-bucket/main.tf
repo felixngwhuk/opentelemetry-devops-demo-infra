@@ -1,9 +1,9 @@
 provider "aws" {
-  region = "eu-west-2"
+  region = var.region
 }
 
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "felixngwhuk-terraform-eks-state-s3-bucket"
+  bucket = var.terraform_state_bucket
 
   lifecycle {
     prevent_destroy = false

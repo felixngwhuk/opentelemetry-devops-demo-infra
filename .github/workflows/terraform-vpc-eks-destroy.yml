@@ -1,0 +1,56 @@
+name: Terraform VPC EKS Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: Type destroy to confirm VPC and EKS destruction
+        required: true
+        type: string
+
+jobs:
+  terraform-vpc-eks-destroy:
+    name: Terraform VPC EKS Destroy
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: aws-infra/vpc-eks
+
+    env:
+      TF_VAR_region: ${{ vars.AWS_REGION }}
+      TF_VAR_cluster_name: ${{ vars.EKS_CLUSTER_NAME }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check destroy confirmation
+        if: ${{ inputs.confirm_destroy != 'destroy' }}
+        run: |
+          echo "confirm_destroy must be set to destroy."
+          exit 1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Set default AWS region
+        run: aws configure set region "${{ vars.AWS_REGION }}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.3
+
+      - name: Terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TERRAFORM_STATE_BUCKET }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+
+      - name: Terraform destroy
+        run: terraform destroy -auto-approve
