@@ -7,6 +7,12 @@ on:
         description: Type teardown to confirm EKS cluster add-on teardown
         required: true
         type: string
+  workflow_call:
+    inputs:
+      confirm_teardown:
+        description: Type teardown to confirm EKS cluster add-on teardown
+        required: true
+        type: string
 
 jobs:
   eks-cluster-teardown:

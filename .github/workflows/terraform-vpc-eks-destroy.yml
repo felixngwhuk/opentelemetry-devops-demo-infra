@@ -7,6 +7,12 @@ on:
         description: Type destroy to confirm VPC and EKS destruction
         required: true
         type: string
+  workflow_call:
+    inputs:
+      confirm_destroy:
+        description: Type destroy to confirm VPC and EKS destruction
+        required: true
+        type: string
 
 jobs:
   terraform-vpc-eks-destroy:

@@ -2,6 +2,7 @@ name: Terraform VPC EKS Apply
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   terraform-vpc-eks-apply:

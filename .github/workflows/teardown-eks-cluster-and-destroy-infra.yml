@@ -1,0 +1,37 @@
+name: Teardown EKS Cluster and Destroy Infra
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_teardown_and_destroy:
+        description: Type teardown-and-destroy to confirm EKS cluster teardown and infra destruction
+        required: true
+        type: string
+
+jobs:
+  validate-confirmation:
+    name: Validate Teardown and Destroy Confirmation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check teardown and destroy confirmation
+        if: ${{ inputs.confirm_teardown_and_destroy != 'teardown-and-destroy' }}
+        run: |
+          echo "confirm_teardown_and_destroy must be set to teardown-and-destroy."
+          exit 1
+
+  eks-cluster-teardown:
+    name: EKS Cluster Teardown
+    needs: validate-confirmation
+    uses: ./.github/workflows/eks-cluster-teardown.yml
+    with:
+      confirm_teardown: teardown
+    secrets: inherit
+
+  terraform-vpc-eks-destroy:
+    name: Terraform VPC EKS Destroy
+    needs: eks-cluster-teardown
+    uses: ./.github/workflows/terraform-vpc-eks-destroy.yml
+    with:
+      confirm_destroy: destroy
+    secrets: inherit

@@ -1,0 +1,16 @@
+name: Provision Infra and Init EKS Cluster
+
+on:
+  workflow_dispatch:
+
+jobs:
+  terraform-vpc-eks-apply:
+    name: Terraform VPC EKS Apply
+    uses: ./.github/workflows/terraform-vpc-eks-apply.yml
+    secrets: inherit
+
+  eks-cluster-init:
+    name: EKS Cluster Init
+    needs: terraform-vpc-eks-apply
+    uses: ./.github/workflows/eks-cluster-init.yml
+    secrets: inherit
