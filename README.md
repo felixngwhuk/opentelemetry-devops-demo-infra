@@ -306,32 +306,173 @@ Important implementation detail:
 To run this project, you need:
 
 - an AWS account
-- AWS credentials configured locally
-- Terraform installed
-- kubectl installed
-- Helm installed
-- eksctl installed
-- a Route 53 hosted zone for the target domain
-- an ACM certificate for the target domain
+- a domain name that you can manage in DNS
+- a GitHub account for forking this infra repo and the GitOps repo
+- AWS credentials that can be stored as GitHub Actions secrets
+- permission to create Route 53, ACM, IAM, S3, VPC, EKS, and load balancer resources
+
+The main setup path uses GitHub Actions, so Terraform, kubectl, Helm, and eksctl are installed or run by the workflows. You only need those tools locally if you want to run the infrastructure or cluster bootstrap steps manually.
 
 ---
 
-## How to use this repository
+## Project setup
 
-### 1) Create the Terraform state bucket
-Create the S3 bucket used for Terraform state first.
+This setup assumes you own a domain name such as `abc.com` and want to expose applications through wildcard subdomains such as `app.abc.com`, `argocd.abc.com`, and `demo.abc.com`.
 
-### 2) Provision the VPC and EKS cluster
-Run Terraform in the `aws-infra/vpc-eks` project.
+### 1) Create the bastion admin IAM role
+Create an IAM role before running the infrastructure workflow. The Terraform EKS module grants this role cluster admin access through an EKS access entry.
 
-### 3) Refresh kubeconfig / cluster access
-Use the refresh script so local tooling can connect to the new EKS cluster.
+Use these settings:
 
-### 4) Bootstrap cluster add-ons
-Run the cluster init script to install the required components.
+- Trusted entity type: `AWS Service`
+- Use case: `EC2`
+- Permission policy: `AmazonSSMManagedInstanceCore`
+- Role name: `EC2BastionAdminRole`
 
-### 5) Connect the GitOps repo
-Once Argo CD is available, use the separate GitOps repository to deploy workloads into the cluster.
+Then add an inline policy:
+
+- Policy name: `EKSBastionClusterAccess`
+- Policy JSON:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowEKSClusterDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "eks:ListClusters",
+        "eks:DescribeCluster"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+### 2) Create the Route 53 hosted zone
+In Route 53, create a public hosted zone for your domain name.
+
+Example:
+
+- Domain name: `abc.com`
+- Type: `Public hosted zone`
+
+After the hosted zone is created, update your domain registrar to use the Route 53 name servers:
+
+1. In the hosted zone, find the `NS` record.
+2. Copy the name servers from the `Value/Route traffic to` column.
+3. Go to your domain registrar, such as GoDaddy, and replace the domain's name servers with the Route 53 name servers.
+
+### 3) Request the ACM wildcard certificate
+In AWS Certificate Manager, request a public certificate for your wildcard domain.
+
+Example:
+
+- Certificate type: `Public certificate`
+- Domain name: `*.abc.com`
+
+Request the certificate in the same AWS region that you will use for the EKS cluster and Network Load Balancer.
+
+After the certificate is created:
+
+1. Open the certificate details page.
+2. In the `Domains` section, choose `Create records in Route 53`.
+3. Follow the AWS prompts to create the DNS validation records.
+4. Wait until the certificate status changes to `Issued`.
+
+### 4) Fork and configure the GitOps repo
+Fork the GitOps repository to your own GitHub account:
+
+```text
+https://github.com/felixngwhuk/opentelemetry-devops-demo-gitops
+```
+
+In your fork, replace all references to `devopsbyfelix.shop` with your own domain name.
+
+Example:
+
+```text
+abc.com
+```
+
+This should be done before the cluster bootstrap workflow runs because Argo CD installs its root application from the GitOps repo.
+
+### 5) Fork and configure this infra repo
+Fork this repository to your own GitHub account.
+
+In your fork, add these GitHub Actions secrets:
+
+| Secret | Description |
+| --- | --- |
+| `AWS_ACCESS_KEY_ID` | Access key ID for an IAM user with permissions to provision the demo infrastructure |
+| `AWS_SECRET_ACCESS_KEY` | Secret access key for the same IAM user |
+
+For a demo project, an admin IAM user is the simplest option. For production-style usage, prefer least-privilege permissions or GitHub OIDC instead of long-lived AWS access keys.
+
+Then add these GitHub Actions variables:
+
+| Variable | Description |
+| --- | --- |
+| `AWS_REGION` | AWS region to deploy into, for example `eu-west-2` |
+| `EKS_CLUSTER_NAME` | Preferred EKS cluster name |
+| `TERRAFORM_STATE_BUCKET` | Globally unique S3 bucket name for Terraform state |
+| `AWS_LOAD_BALANCER_SSL_CERT_ARN` | ARN of the issued ACM wildcard certificate |
+| `ARGOCD_BOOTSTRAP_REPO_URL` | Raw GitHub content base URL for your forked GitOps repo |
+
+`ARGOCD_BOOTSTRAP_REPO_URL` must use the raw GitHub content URL, not the normal GitHub repository URL.
+
+Example:
+
+```text
+https://raw.githubusercontent.com/<your-github-user>/opentelemetry-devops-demo-gitops
+```
+
+The cluster bootstrap script appends `/refs/heads/main/bootstrap/root-application.yaml` to this value when it installs the Argo CD root application.
+
+### 6) Create the Terraform state bucket
+Run this GitHub Actions workflow first:
+
+```text
+terraform-state-s3-bucket-apply
+```
+
+This creates the S3 bucket used by the Terraform backend.
+
+### 7) Provision the infrastructure and bootstrap EKS
+After the Terraform state bucket exists, run this GitHub Actions workflow:
+
+```text
+provision-infra-and-init-eks-cluster
+```
+
+This workflow provisions the VPC and EKS cluster, refreshes cluster access, installs the cluster add-ons, installs Traefik, and bootstraps Argo CD from your GitOps repo.
+
+### 8) Create the wildcard DNS alias
+After Traefik is installed, AWS Load Balancer Controller creates an internet-facing Network Load Balancer.
+
+In your Route 53 hosted zone, create a wildcard `A` record:
+
+- Record name: `*`
+- Record type: `A`
+- Alias: enabled
+- Route traffic to: the Traefik Network Load Balancer
+
+This step has to happen after the cluster bootstrap because the Traefik load balancer does not exist before then.
+
+### Simplified setup flow
+The full setup can be thought of as:
+
+```text
+Create IAM role
+-> Create Route 53 hosted zone and ACM certificate
+-> Fork and configure GitOps repo
+-> Fork and configure infra repo
+-> Run terraform-state-s3-bucket-apply
+-> Run provision-infra-and-init-eks-cluster
+-> Add wildcard Route 53 alias to the Traefik NLB
+```
 
 ---
 
@@ -343,13 +484,7 @@ Once Argo CD is available, use the separate GitOps repository to deploy workload
 **Risk introduced:** Lower isolation between workloads and environments.  
 **What production would look like:** Separate environments, tighter tenancy boundaries, and stronger policy controls.
 
-### 2) Scripted bootstrap for add-ons
-**What I am simplifying:** Installing several add-ons with shell scripts after Terraform completes.  
-**Why:** Keeps the initial platform bootstrap easier to understand and debug.  
-**Risk introduced:** More orchestration logic sits outside Terraform.  
-**What production would look like:** More standardised bootstrapping, stronger CI orchestration, and clearer promotion between environments.
-
-### 3) Static ACM certificate reference in Traefik values
+### 2) Static ACM certificate reference in Traefik values
 **What I am simplifying:** The ACM certificate ARN is currently referenced statically in the Traefik values file.  
 **Why:** It is the fastest way to get the NLB listener configured during a demo.  
 **Risk introduced:** Less portability between accounts or regions, and more manual change when the certificate changes.  
