@@ -7,12 +7,30 @@ It installs:
 - Docker Engine, optional
 - AWS CLI v2
 - kubectl
+- EKS kubeconfig refresh on interactive SSH login
 - Terraform
 - eksctl
 - Helm
 - Git
 
-It does **not** configure AWS access keys. The EC2 instance should use an IAM role / instance profile.
+By default, the playbook configures the bastion SSH user to refresh kubeconfig on normal interactive SSH login:
+
+```bash
+aws eks update-kubeconfig --region "$aws_region" --name "$eks_cluster_name"
+kubectl config get-contexts
+kubectl config current-context
+kubectl cluster-info
+```
+
+The hook is added to the user's `.bashrc` with guards for interactive SSH sessions only, so Ansible's non-interactive SSH commands are not affected.
+
+To disable it:
+
+```yaml
+enable_eks_login_refresh: false
+```
+
+For the AWS CLI, this playbook does **NOT** configure AWS access keys. The EC2 instance should use an IAM role / instance profile.
 
 ## Current version pins
 
@@ -76,7 +94,7 @@ Edit `inventory.ini`:
 
 ```ini
 [bastion]
-bastion-1 ansible_host=YOUR_EC2_PUBLIC_IP aws_region=YOUR_WORKING_REGION ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/devops-demo.pem
+bastion-1 ansible_host=YOUR_EC2_PUBLIC_IP aws_region=YOUR_WORKING_REGION eks_cluster_name=YOUR_WORKING_CLUSTER ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/devops-demo.pem
 ```
 
 ## Test Ansible connectivity

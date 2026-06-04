@@ -1,2 +1,2 @@
 [bastion]
-bastion-1 ansible_host=YOUR_EC2_PUBLIC_IP aws_region=YOUR_WORKING_REGION ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/devops-demo.pem ansible_python_interpreter=/usr/bin/python3.14
+bastion-1 ansible_host=YOUR_EC2_PUBLIC_IP aws_region=YOUR_WORKING_REGION eks_cluster_name=YOUR_WORKING_CLUSTER ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/devops-demo.pem ansible_python_interpreter=/usr/bin/python3.14

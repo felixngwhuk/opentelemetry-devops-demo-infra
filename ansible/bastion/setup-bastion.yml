@@ -10,6 +10,7 @@
       when: install_docker | bool
     - awscli
     - kubectl
+    - eks_login_refresh
     - terraform
     - eksctl
     - helm

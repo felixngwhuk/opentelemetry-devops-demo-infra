@@ -1,0 +1,80 @@
+---
+- name: Validate EKS login refresh variables
+  ansible.builtin.assert:
+    that:
+      - ansible_user is defined
+      - ansible_user | length > 0
+      - aws_region is defined
+      - aws_region | length > 0
+      - eks_cluster_name is defined
+      - eks_cluster_name | length > 0
+    fail_msg: "ansible_user, aws_region, and eks_cluster_name are required when enable_eks_login_refresh is true."
+  when: enable_eks_login_refresh | bool
+
+- name: Set EKS login refresh paths
+  ansible.builtin.set_fact:
+    eks_login_refresh_bin_dir: "/home/{{ ansible_user }}/.local/bin"
+    eks_login_refresh_script_path: "/home/{{ ansible_user }}/.local/bin/refresh-eks-kubeconfig"
+    eks_login_refresh_bashrc_path: "/home/{{ ansible_user }}/.bashrc"
+
+- name: Ensure EKS login refresh bin directory exists
+  ansible.builtin.file:
+    path: "{{ eks_login_refresh_bin_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  when: enable_eks_login_refresh | bool
+
+- name: Install EKS kubeconfig refresh script
+  ansible.builtin.copy:
+    dest: "{{ eks_login_refresh_script_path }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      AWS_REGION={{ aws_region | quote }}
+      EKS_CLUSTER_NAME={{ eks_cluster_name | quote }}
+
+      echo "Refreshing EKS kubeconfig for ${EKS_CLUSTER_NAME} in ${AWS_REGION}..."
+      aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}"
+      kubectl config get-contexts
+      kubectl config current-context
+      kubectl cluster-info
+  when: enable_eks_login_refresh | bool
+
+- name: Enable EKS refresh for interactive SSH logins
+  ansible.builtin.blockinfile:
+    path: "{{ eks_login_refresh_bashrc_path }}"
+    create: true
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - EKS login refresh"
+    block: |
+      # Refresh EKS kubeconfig when opening an interactive SSH session.
+      case "$-" in
+        *i*) ;;
+        *) return ;;
+      esac
+
+      if [ -n "${SSH_TTY:-}" ] && [ -x "{{ eks_login_refresh_script_path }}" ]; then
+        "{{ eks_login_refresh_script_path }}" || true
+      fi
+  when: enable_eks_login_refresh | bool
+
+- name: Disable EKS refresh for interactive SSH logins
+  ansible.builtin.blockinfile:
+    path: "{{ eks_login_refresh_bashrc_path }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - EKS login refresh"
+    state: absent
+  when: not (enable_eks_login_refresh | bool)
+
+- name: Remove EKS kubeconfig refresh script when disabled
+  ansible.builtin.file:
+    path: "{{ eks_login_refresh_script_path }}"
+    state: absent
+  when: not (enable_eks_login_refresh | bool)
