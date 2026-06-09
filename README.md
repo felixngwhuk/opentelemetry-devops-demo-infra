@@ -25,6 +25,8 @@ This repository demonstrates practical platform engineering work across:
 - Ingress and public traffic flow design
 - GitOps platform enablement with Argo CD
 - Operational automation and environment trade-offs
+- GitHub Actions lifecycle orchestration for provisioning, bootstrap, teardown, and destroy workflows
+- Ansible-based bastion/admin host configuration for repeatable EKS operations
 
 ---
 
@@ -38,6 +40,8 @@ This project provisions and bootstraps:
 - cluster add-ons required for ingress, storage, metrics, and GitOps
 - **Traefik** as the in-cluster ingress controller
 - **Argo CD** as the GitOps entry point for application deployment
+- GitHub Actions workflows that orchestrate Terraform apply, EKS bootstrap, add-on teardown, and infrastructure destroy
+- Ansible automation for configuring an EC2 bastion/admin host with the tools needed to operate the EKS platform
 
 The goal of this repository is not only to create an EKS cluster, but to show **how I structure the platform layer first** before deploying workloads.
 
@@ -60,6 +64,8 @@ Within this infra repo, I used:
 - **bootstrap scripts** for cluster add-ons because some post-cluster steps are operational tasks rather than core infrastructure resources
 - **Traefik** to provide simple hostname-based routing for multiple demo applications
 - **Argo CD** so application deployment can be managed through GitOps rather than manual kubectl apply workflows
+- **GitHub Actions** to provide a repeatable operator entry point for provisioning, bootstrapping, tearing down, and destroying the platform
+- **Ansible** to configure a bastion/admin host with a pinned DevOps toolchain and EKS access helpers
 
 ---
 
@@ -71,6 +77,16 @@ I used Terraform to define the AWS foundation because I wanted the environment t
 - modular Terraform for **VPC** and **EKS**
 - remote state stored in **S3**
 - parameterised values for region, CIDR ranges, Availability Zones, Kubernetes version, and node sizing
+
+### GitHub Actions lifecycle orchestration
+
+I used GitHub Actions as the operator entry point for the infrastructure lifecycle so provisioning, EKS bootstrap, teardown, and destroy steps can run through repeatable workflows instead of ad hoc local commands. This includes:
+
+- Terraform state and VPC/EKS apply workflows
+- EKS cluster initialization through reusable bootstrap workflows
+- chained provisioning that runs infrastructure creation before cluster initialization
+- teardown and destroy workflows with typed confirmation gates
+- `workflow_call`, `workflow_dispatch`, repository variables, and secrets for controlled runs
 
 ### AWS networking and platform setup
 I created a dedicated VPC layout because I wanted public access to enter through load balancers while keeping worker nodes in private subnets. This includes:
@@ -88,6 +104,16 @@ I added cluster bootstrap scripts because creating the cluster is only the first
 - metrics-server
 - Traefik
 - Argo CD
+
+### Bastion host configuration with Ansible
+
+I added Ansible automation to configure an EC2 bastion/admin host as a repeatable operator workstation for the EKS platform. This includes:
+
+- AWS CLI, kubectl, Terraform, eksctl, Helm, Git, and optional Docker installation
+- pinned versions for kubectl, Terraform, eksctl, and Helm in `ansible/bastion/group_vars/bastion.yml`
+- check-mode support and installed tool version checks
+- Terraform checksum verification and idempotent Helm repository setup
+- optional `eks_login_refresh` helper for kubeconfig refresh and cluster access checks on SSH login
 
 ### Ingress and public access design
 I used Traefik plus an AWS network load balancer because I wanted a simple way to expose multiple applications through subdomains while keeping routing logic inside the cluster.
@@ -114,37 +140,65 @@ I added helper scripts and bootstrap logging because even for a demo environment
 ### Architecture diagram
 
 ```mermaid
-flowchart TD
+flowchart LR
     U[End user browser] --> D[Route 53 hosted zone\n*.devopsbyfelix.shop]
-    D --> NLB[Internet-facing AWS NLB]
-    NLB -->|TLS terminates here| T[Traefik on EKS]
+    D --> NLB[Internet-facing AWS NLB\nACM TLS termination]
+    NLB -->|HTTP forwarded after TLS termination| T[Traefik on EKS]
+
     T --> A1[Application 1]
     T --> A2[Application 2]
     T --> A3[Application N]
+    T --> ARGO[Argo CD]
+
+    TF[Terraform] --> EKS_VPC
+    TF --> EKSCP[EKS control plane\nAWS-managed]
+    TF --> EKS
+
+    SCRIPTS[Bootstrap scripts] --> T
+    SCRIPTS --> ARGO
+    SCRIPTS --> ADDONS[Cluster add-ons\nAWS Load Balancer Controller / EBS CSI / metrics-server]
+    ADDONS --> NLB
+
+    BASTION["EC2 bastion (provisioned manually)\nAnsible-configured toolchain"] -->|kubectl / AWS IAM access| EKSCP
+    EKSCP --> EKS
 
     subgraph AWS
-      subgraph VPC
-        subgraph Public Subnets
+      direction LR
+
+      subgraph OPS_VPC["VPC (provisioned manually)"]
+        direction TB
+        subgraph OPS_PUBLIC["Public Subnet"]
+          BASTION
+        end
+      end
+
+      subgraph AWS_MANAGED["AWS-managed services outside VPC"]
+        direction TB
+        D
+        EKSCP
+      end
+
+      subgraph EKS_VPC["Terraform-managed EKS VPC"]
+        direction TB
+        subgraph PUBLIC["Public Subnets"]
           NLB
           NAT[NAT Gateways]
         end
-        subgraph Private Subnets
+
+        subgraph PRIVATE["Private Subnets"]
           EKS[EKS managed node group]
+          ADDONS
           T
           A1
           A2
           A3
-          ARGO[Argo CD]
+          ARGO
         end
       end
     end
 
-    TF[Terraform] --> VPC[VPC + networking]
-    TF --> EKSCP[EKS control plane]
-    TF --> EKS
-    SCRIPTS[Bootstrap scripts] --> T
-    SCRIPTS --> ARGO
-    SCRIPTS --> ADDONS[AWS Load Balancer Controller / EBS CSI / metrics-server]
+    OPS_VPC ~~~ AWS_MANAGED
+    AWS_MANAGED ~~~ EKS_VPC
 ```
 
 ---
@@ -153,6 +207,15 @@ flowchart TD
 
 ```text
 .
+├── .github/
+│   └── workflows/
+│       ├── terraform-state-s3-bucket-apply.yml
+│       ├── terraform-vpc-eks-apply.yml
+│       ├── terraform-vpc-eks-destroy.yml
+│       ├── eks-cluster-init.yml
+│       ├── eks-cluster-teardown.yml
+│       ├── provision-infra-and-init-eks-cluster.yml
+│       └── teardown-eks-cluster-and-destroy-infra.yml
 ├── aws-infra/
 │   ├── terraform-state-s3-bucket/
 │   │   ├── main.tf
@@ -170,6 +233,13 @@ flowchart TD
 │               ├── main.tf
 │               ├── variables.tf
 │               └── outputs.tf
+├── ansible/
+│   └── bastion/
+│       ├── setup-bastion.yml
+│       ├── group_vars/
+│       │   └── bastion.yml
+│       ├── inventory.ini.example
+│       └── roles/
 ├── eks-cluster/
 │   ├── eks-cluster-init.sh
 │   ├── eks-cluster-teardown.sh
@@ -291,6 +361,8 @@ Important implementation detail:
 
 ## Tooling used
 
+- **GitHub Actions** for orchestrating infrastructure lifecycle workflows
+- **Ansible** for bastion/admin host configuration
 - **Terraform** for AWS infrastructure provisioning
 - **AWS CLI** for AWS access and cluster queries
 - **kubectl** for Kubernetes management
@@ -350,6 +422,27 @@ Then add an inline policy:
   ]
 }
 ```
+
+### Optional: Configure the bastion/admin host with Ansible
+
+If you want to operate the EKS cluster from an EC2 bastion/admin host, use the Ansible project under `ansible/bastion`.
+
+The intended flow is:
+
+```bash
+cd ansible/bastion
+cp inventory.ini.example inventory.ini
+# Edit inventory.ini with the bastion host, AWS Region, SSH user, and SSH key details.
+
+ansible-playbook -i inventory.ini setup-bastion.yml --check
+ansible-playbook -i inventory.ini setup-bastion.yml
+```
+
+The playbook installs the EKS administration toolchain and prints installed tool versions at the end of the run.
+
+By default, the bastion configuration can enable an EKS kubeconfig refresh helper. This is useful when the bastion host is used as the main operator machine for checking cluster state, running kubectl commands, or debugging platform bootstrap issues.
+
+Docker installation is controlled separately through `install_docker` in `group_vars/bastion.yml`, so the bastion host can stay lightweight unless container tooling is needed.
 
 ### 2) Create the Route 53 hosted zone
 In Route 53, create a public hosted zone for your domain name.
