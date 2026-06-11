@@ -143,23 +143,19 @@ I added helper scripts and bootstrap logging because even for a demo environment
 flowchart LR
     U[End user browser] --> D[Route 53 hosted zone\n*.devopsbyfelix.shop]
     D --> NLB[Internet-facing AWS NLB\nACM TLS termination]
-    NLB -->|HTTP forwarded after TLS termination| T[Traefik on EKS]
+    NLB -->|HTTP forwarded after TLS termination| T["Traefik on EKS\n(by Bootstrap scripts)"]
 
     T --> A1[Application 1]
     T --> A2[Application 2]
     T --> A3[Application N]
-    T --> ARGO[Argo CD]
+    T --> ARGO["Argo CD\n(by Bootstrap scripts)"]
 
-    TF[Terraform] --> EKS_VPC
-    TF --> EKSCP[EKS control plane\nAWS-managed]
-    TF --> EKS
+    ADDONS_LB_CTL["Cluster add-ons :\nAWS Load Balancer Controller\n(by Bootstrap scripts)"] --> NLB
+    ADDONS_EBS_CSI["Cluster add-ons :\nEBS CSI\n(by Bootstrap scripts)"]
+    ADDONS_METRICS["Cluster add-ons :\nmetrics-server\n(by Bootstrap scripts)"]
 
-    SCRIPTS[Bootstrap scripts] --> T
-    SCRIPTS --> ARGO
-    SCRIPTS --> ADDONS[Cluster add-ons\nAWS Load Balancer Controller / EBS CSI / metrics-server]
-    ADDONS --> NLB
-
-    BASTION["EC2 bastion (provisioned manually)\nAnsible-configured toolchain"] -->|kubectl / AWS IAM access| EKSCP
+    ADMIN[Administrator] --> BASTION
+    BASTION["EC2 bastion (provisioned manually)\nAnsible-configured toolchain"] -->|kubectl / AWS IAM access| EKSCP["EKS control plane\n(Terraform-managed)"]
     EKSCP --> EKS
 
     subgraph AWS
@@ -178,7 +174,7 @@ flowchart LR
         EKSCP
       end
 
-      subgraph EKS_VPC["Terraform-managed EKS VPC"]
+      subgraph EKS_VPC["EKS VPC (Terraform-managed)"]
         direction TB
         subgraph PUBLIC["Public Subnets"]
           NLB
@@ -186,8 +182,10 @@ flowchart LR
         end
 
         subgraph PRIVATE["Private Subnets"]
-          EKS[EKS managed node group]
-          ADDONS
+          EKS["EKS managed node group\n(Terraform-managed)"]
+          ADDONS_LB_CTL
+          ADDONS_EBS_CSI
+          ADDONS_METRICS
           T
           A1
           A2
