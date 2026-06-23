@@ -39,12 +39,10 @@ ports:
     targetPort: web
 
 # Turn on access logs and Prometheus metrics
-logs:
-  access:
-    enabled: true
+accessLog:
+  enabled: true
 metrics:
-  prometheus:
-    enabled: true
+  prometheus: {}
 
 service:
   type: LoadBalancer

@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   workflow_call:
 
+concurrency:
+  group: eks-cluster-init
+  cancel-in-progress: false
+
 jobs:
   eks-cluster-init:
     name: EKS Cluster Init

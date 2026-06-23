@@ -251,6 +251,7 @@ flowchart LR
 │       ├── install_traefik_custom_values.yaml
 │       ├── install_argocd.sh
 │       ├── install_argocd_custom_values.yaml
+│       ├── bootstrap_helpers.sh
 │       ├── refresh_eks_cluster_connection.sh
 │       └── traefik-pdb.yaml
 └── utilities/

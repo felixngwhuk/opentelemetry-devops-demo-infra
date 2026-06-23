@@ -1,19 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export eks_cluster_vpc_id=$(aws eks describe-cluster  --name "$my_eks_cluster_name"  --query "cluster.resourcesVpcConfig.vpcId"  --output text)
+AWS_LOAD_BALANCER_CONTROLLER_CHART_VERSION="3.4.0"
 
-helm repo add eks https://aws.github.io/eks-charts
+eks_cluster_vpc_id="$(
+  aws eks describe-cluster \
+    --name "$my_eks_cluster_name" \
+    --query "cluster.resourcesVpcConfig.vpcId" \
+    --output text
+)"
 
+helm repo add eks https://aws.github.io/eks-charts --force-update
 helm repo update eks
 
-helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-  -n kube-system \
-  --set clusterName=$my_eks_cluster_name \
+echo "Validating AWS Load Balancer Controller chart values against chart ${AWS_LOAD_BALANCER_CONTROLLER_CHART_VERSION}..."
+helm template aws-load-balancer-controller eks/aws-load-balancer-controller \
+  --namespace kube-system \
+  --version "$AWS_LOAD_BALANCER_CONTROLLER_CHART_VERSION" \
+  --set "clusterName=$my_eks_cluster_name" \
   --set serviceAccount.create=false \
   --set serviceAccount.name=aws-load-balancer-controller \
-  --set region=$my_aws_region_name \
-  --set vpcId=$eks_cluster_vpc_id
+  --set "region=$my_aws_region_name" \
+  --set "vpcId=$eks_cluster_vpc_id" \
+  >/dev/null
+
+helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --version "$AWS_LOAD_BALANCER_CONTROLLER_CHART_VERSION" \
+  --set "clusterName=$my_eks_cluster_name" \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set "region=$my_aws_region_name" \
+  --set "vpcId=$eks_cluster_vpc_id" \
+  --wait \
+  --timeout 10m \
+  --cleanup-on-fail
 
 echo "waiting for aws-load-balancer deployment and pods ready ..."
 kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=300s
