@@ -22,6 +22,7 @@ helm template aws-load-balancer-controller eks/aws-load-balancer-controller \
   --set serviceAccount.name=aws-load-balancer-controller \
   --set "region=$my_aws_region_name" \
   --set "vpcId=$eks_cluster_vpc_id" \
+  --set keepTLSSecret=true \
   >/dev/null
 
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
@@ -32,11 +33,13 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set serviceAccount.name=aws-load-balancer-controller \
   --set "region=$my_aws_region_name" \
   --set "vpcId=$eks_cluster_vpc_id" \
+  --set keepTLSSecret=true \
   --wait \
   --timeout 10m \
   --cleanup-on-fail
 
-echo "waiting for aws-load-balancer deployment and pods ready ..."
+echo "Restarting AWS Load Balancer Controller to load current webhook TLS secret..."
+kubectl -n kube-system rollout restart deployment/aws-load-balancer-controller
 kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=300s
 echo "aws-load-balancer deployment and pods are ready"
 
@@ -56,3 +59,11 @@ until kubectl -n kube-system get endpointslice \
 done
 
 echo "webhook EndpointSlice endpoints ready"
+
+echo "Checking AWS Load Balancer Controller service mutating webhook..."
+kubectl -n kube-system create service clusterip aws-load-balancer-webhook-smoke \
+  --tcp=80:80 \
+  --dry-run=server \
+  -o yaml \
+  >/dev/null
+echo "AWS Load Balancer Controller service mutating webhook is reachable."

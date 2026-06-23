@@ -23,6 +23,20 @@ print_bootstrap_state() {
   echo "--- Relevant deployments ---"
   kubectl get deployments --all-namespaces || true
 
+  echo "--- AWS Load Balancer Controller webhook service ---"
+  kubectl -n kube-system get service aws-load-balancer-webhook-service -o wide || true
+  kubectl -n kube-system get endpointslice \
+    -l kubernetes.io/service-name=aws-load-balancer-webhook-service \
+    -o wide || true
+
+  echo "--- AWS Load Balancer Controller webhook configurations ---"
+  kubectl get mutatingwebhookconfiguration aws-load-balancer-webhook \
+    -o jsonpath='{range .webhooks[*]}{.name}{"\t"}{.failurePolicy}{"\t"}{.clientConfig.service.namespace}{"/"}{.clientConfig.service.name}{.clientConfig.service.path}{"\n"}{end}' \
+    || true
+  kubectl get validatingwebhookconfiguration aws-load-balancer-webhook \
+    -o jsonpath='{range .webhooks[*]}{.name}{"\t"}{.failurePolicy}{"\t"}{.clientConfig.service.namespace}{"/"}{.clientConfig.service.name}{.clientConfig.service.path}{"\n"}{end}' \
+    || true
+
   echo "--- EBS CSI node DaemonSet ---"
   kubectl -n kube-system get daemonset ebs-csi-node -o wide || true
 
