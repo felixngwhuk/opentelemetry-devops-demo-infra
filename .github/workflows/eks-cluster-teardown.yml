@@ -47,7 +47,37 @@ jobs:
       - name: Set default AWS region
         run: aws configure set region "${{ vars.AWS_REGION }}"
 
+      - name: Check EKS cluster exists
+        id: check-cluster
+        run: |
+          set +e
+          output="$(
+            aws eks describe-cluster \
+              --name "$my_eks_cluster_name" \
+              --region "$my_aws_region_name" \
+              2>&1
+          )"
+          status="$?"
+          set -e
+
+          if [[ "$status" -eq 0 ]]; then
+            echo "cluster_exists=true" >> "$GITHUB_OUTPUT"
+            echo "EKS cluster '$my_eks_cluster_name' exists."
+          elif grep -q "ResourceNotFoundException" <<<"$output"; then
+            echo "cluster_exists=false" >> "$GITHUB_OUTPUT"
+            echo "EKS cluster '$my_eks_cluster_name' was not found; Kubernetes teardown will be skipped."
+          else
+            echo "$output"
+            exit "$status"
+          fi
+
+      - name: Summarize skipped Kubernetes teardown
+        if: ${{ steps.check-cluster.outputs.cluster_exists == 'false' }}
+        run: |
+          echo "Cluster not found; Kubernetes teardown skipped." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Install kubectl
+        if: ${{ steps.check-cluster.outputs.cluster_exists == 'true' }}
         run: |
           curl -fsSLo kubectl https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl
           chmod +x kubectl
@@ -55,6 +85,7 @@ jobs:
           kubectl version --client=true
 
       - name: Install Helm
+        if: ${{ steps.check-cluster.outputs.cluster_exists == 'true' }}
         run: |
           curl -fsSLo helm-v4.1.0-linux-amd64.tar.gz https://get.helm.sh/helm-v4.1.0-linux-amd64.tar.gz
           tar -zxvf helm-v4.1.0-linux-amd64.tar.gz
@@ -62,11 +93,17 @@ jobs:
           helm version --short
 
       - name: Install eksctl
+        if: ${{ steps.check-cluster.outputs.cluster_exists == 'true' }}
         run: |
           curl -fsSLo eksctl_Linux_amd64.tar.gz https://github.com/eksctl-io/eksctl/releases/download/v0.226.0/eksctl_Linux_amd64.tar.gz
           tar -zxvf eksctl_Linux_amd64.tar.gz
           sudo install -o root -g root -m 0755 eksctl /usr/local/bin/eksctl
           eksctl version
 
+      - name: Verify jq
+        if: ${{ steps.check-cluster.outputs.cluster_exists == 'true' }}
+        run: jq --version
+
       - name: Run EKS cluster teardown script
+        if: ${{ steps.check-cluster.outputs.cluster_exists == 'true' }}
         run: ./eks-cluster-teardown.sh

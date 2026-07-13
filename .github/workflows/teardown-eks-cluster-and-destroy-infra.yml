@@ -1,6 +1,9 @@
 name: Teardown EKS Cluster and Destroy Infra
 
 on:
+  schedule:
+    # Daily auto-teardown at 22:00 UTC, 23:00 UK time during BST.
+    - cron: "0 22 * * *"
   workflow_dispatch:
     inputs:
       confirm_teardown_and_destroy:
@@ -15,7 +18,7 @@ jobs:
 
     steps:
       - name: Check teardown and destroy confirmation
-        if: ${{ inputs.confirm_teardown_and_destroy != 'teardown-and-destroy' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_teardown_and_destroy != 'teardown-and-destroy' }}
         run: |
           echo "confirm_teardown_and_destroy must be set to teardown-and-destroy."
           exit 1
