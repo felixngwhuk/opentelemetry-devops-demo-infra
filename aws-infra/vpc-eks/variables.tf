@@ -61,8 +61,8 @@ variable "node_groups" {
       instance_types = ["t3.large"]
       capacity_type  = "ON_DEMAND"
       scaling_config = {
-        desired_size = 3
-        max_size     = 4
+        desired_size = 4
+        max_size     = 5
         min_size     = 1
       }
     }
