@@ -55,6 +55,72 @@ namespace_exists() {
   kubectl get namespace "$namespace" >/dev/null 2>&1
 }
 
+delete_monitoring_storage() {
+  local namespace=monitoring
+  local prometheus=monitoring-kube-prometheus-prometheus
+  local statefulset="prometheus-${prometheus}"
+  local claim_template pvc pvc_json pv pod
+
+  monitoring_volume_id=""
+  claim_template="$(kubectl get statefulset "$statefulset" -n "$namespace" --ignore-not-found=true -o jsonpath='{.spec.volumeClaimTemplates[0].metadata.name}')"
+  if [[ -z "$claim_template" ]]; then
+    echo "Monitoring StatefulSet not found; skipping storage cleanup."
+    return 0
+  fi
+
+  pvc="${claim_template}-${statefulset}-0"
+  pvc_json="$(kubectl get pvc "$pvc" -n "$namespace" --ignore-not-found=true -o json)"
+  pv="$(jq -r '.spec.volumeName // empty' <<<"$pvc_json")"
+  if [[ -z "$pv" ]]; then
+    # A previous attempt may have deleted the PVC while its PV is reclaiming.
+    pv="$(kubectl get pv -o json | jq -r --arg pvc "$pvc" --arg ns "$namespace" '
+      [.items[] | select(.spec.claimRef.name == $pvc and .spec.claimRef.namespace == $ns)]
+      | if length > 1 then error("Multiple PVs reference the monitoring claim")
+        else .[0].metadata.name // empty end')"
+  fi
+  if [[ -z "$pvc_json" && -z "$pv" ]]; then
+    echo "Monitoring PVC/PV already absent; skipping storage cleanup."
+    return 0
+  fi
+  if [[ -n "$pv" ]]; then
+    monitoring_volume_id="$(kubectl get pv "$pv" -o jsonpath='{.spec.csi.volumeHandle}')"
+  fi
+  echo "Monitoring storage: PVC=$namespace/$pvc PV=$pv EBS=$monitoring_volume_id"
+
+  kubectl patch prometheus "$prometheus" -n "$namespace" --type=merge -p '{"spec":{"replicas":0}}'
+  pod="$(kubectl get pod "${statefulset}-0" -n "$namespace" --ignore-not-found=true -o name)"
+  if [[ -n "$pod" ]]; then
+    kubectl wait --for=delete "$pod" -n "$namespace" --timeout=10m
+  fi
+  kubectl delete pvc "$pvc" -n "$namespace" --ignore-not-found=true --wait=true --timeout=15m
+  if [[ -n "$pv" ]]; then
+    kubectl delete pv "$pv" --ignore-not-found=true --wait=true --timeout=15m
+  fi
+}
+
+wait_monitoring_volume_deleted() {
+  local attempt output
+
+  if [[ -z "$monitoring_volume_id" ]]; then
+    echo "No monitoring EBS volume ID captured; skipping AWS verification."
+    return 0
+  fi
+  for ((attempt = 0; attempt < 18; attempt++)); do
+    if output="$(aws ec2 describe-volumes --volume-ids "$monitoring_volume_id" --region "$my_aws_region_name" --output json 2>&1)"; then
+      echo "EBS volume $monitoring_volume_id still exists; waiting for CSI reclamation."
+    elif grep -Fq '(InvalidVolume.NotFound)' <<<"$output"; then
+      echo "EBS volume $monitoring_volume_id is absent."
+      return 0
+    else
+      echo "Could not verify EBS volume $monitoring_volume_id: $output" >&2
+      return 1
+    fi
+    sleep 5
+  done
+  echo "Timed out after 90 seconds waiting for EBS volume $monitoring_volume_id; inspect CSI logs and volume attachments before retrying." >&2
+  return 1
+}
+
 delete_iam_service_account_if_exists() {
   local namespace="$1"
   local service_account="$2"
@@ -126,6 +192,12 @@ fi
 
 echo "====== Running refresh_eks_cluster_connection.sh ======"
 ./scripts/refresh_eks_cluster_connection.sh
+
+echo "========== Delete monitoring PVC/PV =========="
+delete_monitoring_storage
+
+echo "========== Wait for monitoring EBS volume deletion =========="
+wait_monitoring_volume_deleted
 
 echo "========== uninstall traefik  ========="
 uninstall_helm_release traefik traefik
